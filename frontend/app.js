@@ -35,15 +35,14 @@ const API_URL =
 // Tasks
 // ================================
 
-// All tasks returned from backend
 let allTasks = [];
 
 
 // ================================
-// Login Button
+// Login / Sign Out
 // ================================
 
-loginButton.addEventListener("click", () => {
+loginButton.addEventListener("click", function () {
 
     const accessToken =
         sessionStorage.getItem("access_token");
@@ -52,17 +51,20 @@ loginButton.addEventListener("click", () => {
 
         signOut();
 
-    } else {
-
-        const loginUrl =
-            `${COGNITO_DOMAIN}/login` +
-            `?client_id=${CLIENT_ID}` +
-            `&response_type=code` +
-            `&scope=email+openid+phone` +
-            `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
-
-        window.location.href = loginUrl;
+        return;
     }
+
+
+    const loginUrl =
+        `${COGNITO_DOMAIN}/login` +
+        `?client_id=${CLIENT_ID}` +
+        `&response_type=code` +
+        `&scope=email+openid+phone` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+
+
+    window.location.href = loginUrl;
+
 });
 
 
@@ -78,13 +80,17 @@ async function handleCallback() {
     const code =
         params.get("code");
 
+
     if (!code) {
         return;
     }
 
+
     try {
 
-        status.textContent = "Signing in...";
+        status.textContent =
+            "Signing in...";
+
 
         const response =
             await fetch(
@@ -137,7 +143,6 @@ async function handleCallback() {
         );
 
 
-        // Remove ?code= from URL
         window.history.replaceState(
             {},
             document.title,
@@ -146,8 +151,6 @@ async function handleCallback() {
 
 
         showLoggedInState();
-
-        console.log("Login successful");
 
 
         await loadTasks();
@@ -175,17 +178,20 @@ async function checkSession() {
     const accessToken =
         sessionStorage.getItem("access_token");
 
-    if (accessToken) {
 
-        showLoggedInState();
-
-        await loadTasks();
+    if (!accessToken) {
+        return;
     }
+
+
+    showLoggedInState();
+
+    await loadTasks();
 }
 
 
 // ================================
-// Logged In UI
+// Logged In State
 // ================================
 
 function showLoggedInState() {
@@ -238,18 +244,17 @@ function signOut() {
 
 
 // ================================
-// Add Task
+// ADD TASK
 // ================================
 
 addTaskButton.addEventListener(
     "click",
-    async () => {
+    async function () {
 
         const accessToken =
             sessionStorage.getItem("access_token");
 
 
-        // Must be logged in
         if (!accessToken) {
 
             status.textContent =
@@ -305,13 +310,13 @@ addTaskButton.addEventListener(
                     await response.text();
 
                 console.error(
-                    "API Error:",
+                    "POST Error:",
                     response.status,
                     errorText
                 );
 
                 throw new Error(
-                    `API Error: ${response.status}`
+                    `POST Error: ${response.status}`
                 );
             }
 
@@ -321,12 +326,13 @@ addTaskButton.addEventListener(
 
 
             console.log(
-                "Task created:",
+                "New task:",
                 newTask
             );
 
 
-            // Add task to all tasks
+            // Add the new task
+            // to all user's tasks
             allTasks.push(newTask);
 
 
@@ -334,8 +340,7 @@ addTaskButton.addEventListener(
             taskInput.value = "";
 
 
-            // IMPORTANT:
-            // Re-apply current search
+            // Re-render using current search
             renderTasks();
 
 
@@ -358,7 +363,7 @@ addTaskButton.addEventListener(
 
 
 // ================================
-// Load Tasks
+// GET TASKS
 // ================================
 
 async function loadTasks() {
@@ -398,13 +403,13 @@ async function loadTasks() {
                 await response.text();
 
             console.error(
-                "GET API Error:",
+                "GET Error:",
                 response.status,
                 errorText
             );
 
             throw new Error(
-                `GET API Error: ${response.status}`
+                `GET Error: ${response.status}`
             );
         }
 
@@ -413,7 +418,12 @@ async function loadTasks() {
             await response.json();
 
 
-        // Display tasks
+        console.log(
+            "User tasks:",
+            allTasks
+        );
+
+
         renderTasks();
 
 
@@ -435,7 +445,7 @@ async function loadTasks() {
 
 
 // ================================
-// Render Tasks
+// RENDER TASKS
 // ================================
 
 function renderTasks() {
@@ -446,22 +456,45 @@ function renderTasks() {
             .toLowerCase();
 
 
+    let tasksToShow;
+
+
     // ============================
-    // Filter
+    // No Search
     // ============================
 
-    const filteredTasks =
-        allTasks.filter(task => {
+    if (searchText === "") {
 
-            const title =
-                String(task.title || "")
-                    .toLowerCase();
+        tasksToShow =
+            allTasks;
 
-            return title.includes(searchText);
-        });
+    }
+
+    // ============================
+    // Search Active
+    // ============================
+
+    else {
+
+        tasksToShow =
+            allTasks.filter(function (task) {
+
+                const title =
+                    String(task.title || "")
+                        .toLowerCase();
 
 
-    // Clear current list
+                return title.includes(
+                    searchText
+                );
+            });
+    }
+
+
+    // ============================
+    // Clear List
+    // ============================
+
     taskList.innerHTML = "";
 
 
@@ -469,23 +502,24 @@ function renderTasks() {
     // No Results
     // ============================
 
-    if (filteredTasks.length === 0) {
+    if (tasksToShow.length === 0) {
 
-        const emptyMessage =
+        const li =
             document.createElement("li");
 
-        emptyMessage.textContent =
+
+        li.textContent =
             searchText
                 ? "No tasks found."
                 : "No tasks yet.";
 
-        emptyMessage.classList.add(
+
+        li.classList.add(
             "empty-task"
         );
 
-        taskList.appendChild(
-            emptyMessage
-        );
+
+        taskList.appendChild(li);
 
 
         updateTaskCount(0);
@@ -495,37 +529,40 @@ function renderTasks() {
 
 
     // ============================
-    // Display Filtered Tasks
+    // Display Tasks
     // ============================
 
-    filteredTasks.forEach(task => {
+    tasksToShow.forEach(function (task) {
 
         const li =
             document.createElement("li");
 
+
         li.textContent =
             task.title;
 
+
         taskList.appendChild(li);
+
     });
 
 
-    // Count only visible tasks
     updateTaskCount(
-        filteredTasks.length
+        tasksToShow.length
     );
 }
 
 
 // ================================
-// Search
+// SEARCH
 // ================================
 
 searchInput.addEventListener(
     "input",
-    () => {
+    function () {
 
         renderTasks();
+
     }
 );
 
@@ -536,10 +573,16 @@ searchInput.addEventListener(
 
 function updateTaskCount(count) {
 
-    taskCount.textContent =
-        count === 1
-            ? "1 task"
-            : `${count} tasks`;
+    if (count === 1) {
+
+        taskCount.textContent =
+            "1 task";
+
+    } else {
+
+        taskCount.textContent =
+            `${count} tasks`;
+    }
 }
 
 
