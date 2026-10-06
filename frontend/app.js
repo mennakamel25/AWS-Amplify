@@ -1,3 +1,4 @@
+
 const loginButton = document.getElementById("loginButton");
 const status = document.getElementById("status");
 
@@ -51,6 +52,7 @@ async function handleCallback() {
 
     const code = params.get("code");
 
+    // No authorization code
     if (!code) {
         return;
     }
@@ -84,6 +86,7 @@ async function handleCallback() {
 
         const tokens = await response.json();
 
+        // Save tokens
         sessionStorage.setItem(
             "access_token",
             tokens.access_token
@@ -94,12 +97,14 @@ async function handleCallback() {
             tokens.id_token
         );
 
+        // Remove ?code=... from URL
         window.history.replaceState(
             {},
             document.title,
             REDIRECT_URI
         );
 
+        // Update UI
         status.textContent =
             "You are logged in.";
 
@@ -141,6 +146,7 @@ function checkSession() {
         loginButton.disabled = true;
 
     }
+
 }
 
 
@@ -150,12 +156,28 @@ function checkSession() {
 
 addTaskButton.addEventListener("click", () => {
 
+    // Check if user is logged in
+    const accessToken =
+        sessionStorage.getItem("access_token");
+
+    if (!accessToken) {
+
+        status.textContent =
+            "Please login first to add a task.";
+
+        return;
+    }
+
+
+    // Get task text
     const task = taskInput.value.trim();
 
     if (!task) {
         return;
     }
 
+
+    // Add task to UI
     const li = document.createElement("li");
 
     li.textContent = task;
@@ -166,6 +188,10 @@ addTaskButton.addEventListener("click", () => {
 
     updateTaskCount();
 
+
+    status.textContent =
+        "Task added successfully.";
+
 });
 
 
@@ -175,7 +201,8 @@ addTaskButton.addEventListener("click", () => {
 
 function updateTaskCount() {
 
-    const count = taskList.children.length;
+    const count =
+        taskList.children.length;
 
     taskCount.textContent =
         count === 1
