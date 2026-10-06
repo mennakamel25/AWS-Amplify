@@ -1,595 +1,291 @@
 // ================================
-// DOM Elements
+// Configuration (unchanged)
 // ================================
-
-const loginButton = document.getElementById("loginButton");
-const status = document.getElementById("status");
-
-const addTaskButton = document.getElementById("addTask");
-const taskInput = document.getElementById("taskInput");
-
-const taskList = document.getElementById("taskList");
-const taskCount = document.getElementById("taskCount");
-
-const searchInput = document.getElementById("searchInput");
-
+const COGNITO_DOMAIN = "https://us-east-15pnhohgct.auth.us-east-1.amazoncognito.com";
+const CLIENT_ID = "ol5smuff05sa55cpbi4us96lh";
+const REDIRECT_URI = "https://main.d1pgn8um2fjyka.amplifyapp.com/";
+const API_URL = "https://lcjln7lx48.execute-api.us-east-1.amazonaws.com/tasks";
 
 // ================================
-// Configuration
+// State + DOM (filled after page loads)
 // ================================
-
-const COGNITO_DOMAIN =
-    "https://us-east-15pnhohgct.auth.us-east-1.amazoncognito.com";
-
-const CLIENT_ID =
-    "ol5smuff05sa55cpbi4us96lh";
-
-const REDIRECT_URI =
-    "https://main.d1pgn8um2fjyka.amplifyapp.com/";
-
-const API_URL =
-    "https://lcjln7lx48.execute-api.us-east-1.amazonaws.com/tasks";
-
-
-// ================================
-// Tasks
-// ================================
-
 let allTasks = [];
+let loginButton, status, addTaskButton, taskInput, taskList, taskCount, searchInput;
 
+function getToken() {
+    return sessionStorage.getItem("access_token");
+}
+
+// ================================
+// Helpers
+// ================================
+
+// Accepts: [..] | {tasks:[..]} | {items:[..]} | {Items:[..]} | {body:"<json>"}
+function normalizeTasks(data) {
+    if (typeof data === "string") {
+        try { data = JSON.parse(data); } catch { return []; }
+    }
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === "object") {
+        if (data.body !== undefined) return normalizeTasks(data.body);
+        for (const key of ["tasks", "items", "Items", "data"]) {
+            if (Array.isArray(data[key])) return data[key];
+        }
+    }
+    return [];
+}
+
+function extractTask(data) {
+    if (data && typeof data === "object") {
+        if (data.body !== undefined) {
+            try {
+                const inner = typeof data.body === "string" ? JSON.parse(data.body) : data.body;
+                return extractTask(inner);
+            } catch { return null; }
+        }
+        const t = data.task || data.item || data.Item || data;
+        if (t && typeof t.title === "string" && t.title) return t;
+    }
+    return null;
+}
+
+function setStatus(msg) {
+    if (status) status.textContent = msg;
+}
 
 // ================================
 // Login / Sign Out
 // ================================
+function login() {
+    if (getToken()) { signOut(); return; }
 
-loginButton.addEventListener("click", function () {
-
-    const accessToken =
-        sessionStorage.getItem("access_token");
-
-    if (accessToken) {
-
-        signOut();
-
-        return;
-    }
-
-
-    const loginUrl =
+    window.location.href =
         `${COGNITO_DOMAIN}/login` +
         `?client_id=${CLIENT_ID}` +
         `&response_type=code` +
         `&scope=email+openid+phone` +
         `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
-
-
-    window.location.href = loginUrl;
-
-});
-
-
-// ================================
-// Cognito Callback
-// ================================
+}
 
 async function handleCallback() {
-
-    const params =
-        new URLSearchParams(window.location.search);
-
-    const code =
-        params.get("code");
-
-
-    if (!code) {
-        return;
-    }
-
+    const code = new URLSearchParams(window.location.search).get("code");
+    if (!code) return false;
 
     try {
+        setStatus("Signing in...");
 
-        status.textContent =
-            "Signing in...";
+        const response = await fetch(`${COGNITO_DOMAIN}/oauth2/token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                grant_type: "authorization_code",
+                client_id: CLIENT_ID,
+                code: code,
+                redirect_uri: REDIRECT_URI
+            })
+        });
 
+        if (!response.ok) throw new Error(`Token request failed: ${response.status}`);
 
-        const response =
-            await fetch(
-                `${COGNITO_DOMAIN}/oauth2/token`,
-                {
-                    method: "POST",
+        const tokens = await response.json();
+        sessionStorage.setItem("access_token", tokens.access_token);
+        sessionStorage.setItem("id_token", tokens.id_token);
 
-                    headers: {
-                        "Content-Type":
-                            "application/x-www-form-urlencoded"
-                    },
-
-                    body: new URLSearchParams({
-                        grant_type:
-                            "authorization_code",
-
-                        client_id:
-                            CLIENT_ID,
-
-                        code:
-                            code,
-
-                        redirect_uri:
-                            REDIRECT_URI
-                    })
-                }
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                `Token request failed: ${response.status}`
-            );
-        }
-
-
-        const tokens =
-            await response.json();
-
-
-        sessionStorage.setItem(
-            "access_token",
-            tokens.access_token
-        );
-
-        sessionStorage.setItem(
-            "id_token",
-            tokens.id_token
-        );
-
-
-        window.history.replaceState(
-            {},
-            document.title,
-            REDIRECT_URI
-        );
-
+        window.history.replaceState({}, document.title, REDIRECT_URI);
 
         showLoggedInState();
-
-
         await loadTasks();
-
-
+        return true;
     } catch (error) {
-
-        console.error(
-            "Login error:",
-            error
-        );
-
-        status.textContent =
-            "Login failed.";
+        console.error("Login error:", error);
+        setStatus("Login failed.");
+        return true; // callback was handled (even if it failed)
     }
 }
 
-
-// ================================
-// Check Session
-// ================================
-
 async function checkSession() {
-
-    const accessToken =
-        sessionStorage.getItem("access_token");
-
-
-    if (!accessToken) {
-        return;
-    }
-
-
+    if (!getToken()) return;
     showLoggedInState();
-
     await loadTasks();
 }
 
-
-// ================================
-// Logged In State
-// ================================
-
 function showLoggedInState() {
-
-    loginButton.textContent =
-        "Sign Out";
-
-    status.textContent =
-        "You are logged in.";
+    loginButton.textContent = "Sign Out";
+    setStatus("You are logged in.");
 }
 
-
-// ================================
-// Sign Out
-// ================================
-
 function signOut() {
-
-    sessionStorage.removeItem(
-        "access_token"
-    );
-
-    sessionStorage.removeItem(
-        "id_token"
-    );
-
+    sessionStorage.removeItem("access_token");
+    sessionStorage.removeItem("id_token");
 
     allTasks = [];
-
     taskList.innerHTML = "";
-
-    taskCount.textContent =
-        "0 tasks";
-
+    taskCount.textContent = "0 tasks";
     searchInput.value = "";
+    setStatus("You are logged out.");
 
-    status.textContent =
-        "You are logged out.";
-
-
-    const logoutUrl =
+    window.location.href =
         `${COGNITO_DOMAIN}/logout` +
         `?client_id=${CLIENT_ID}` +
         `&logout_uri=${encodeURIComponent(REDIRECT_URI)}`;
-
-
-    window.location.href =
-        logoutUrl;
 }
-
-
-// ================================
-// ADD TASK
-// ================================
-
-addTaskButton.addEventListener(
-    "click",
-    async function () {
-
-        const accessToken =
-            sessionStorage.getItem("access_token");
-
-
-        if (!accessToken) {
-
-            status.textContent =
-                "Please login first to add a task.";
-
-            return;
-        }
-
-
-        const title =
-            taskInput.value.trim();
-
-
-        if (!title) {
-
-            status.textContent =
-                "Please enter a task.";
-
-            return;
-        }
-
-
-        try {
-
-            status.textContent =
-                "Adding task...";
-
-
-            const response =
-                await fetch(
-                    API_URL,
-                    {
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-
-                            "Authorization":
-                                `Bearer ${accessToken}`
-                        },
-
-                        body: JSON.stringify({
-                            title: title
-                        })
-                    }
-                );
-
-
-            if (!response.ok) {
-
-                const errorText =
-                    await response.text();
-
-                console.error(
-                    "POST Error:",
-                    response.status,
-                    errorText
-                );
-
-                throw new Error(
-                    `POST Error: ${response.status}`
-                );
-            }
-
-
-            const newTask =
-                await response.json();
-
-
-            console.log(
-                "New task:",
-                newTask
-            );
-
-
-            // Add the new task
-            // to all user's tasks
-            allTasks.push(newTask);
-
-
-            // Clear input
-            taskInput.value = "";
-
-
-            // Re-render using current search
-            renderTasks();
-
-
-            status.textContent =
-                "Task added successfully.";
-
-
-        } catch (error) {
-
-            console.error(
-                "Add task error:",
-                error
-            );
-
-            status.textContent =
-                "Failed to add task.";
-        }
-    }
-);
-
 
 // ================================
 // GET TASKS
 // ================================
-
-async function loadTasks() {
-
-    const accessToken =
-        sessionStorage.getItem("access_token");
-
-
-    if (!accessToken) {
-        return;
-    }
-
+async function loadTasks(silent = false) {
+    const accessToken = getToken();
+    if (!accessToken) return;
 
     try {
+        if (!silent) setStatus("Loading tasks...");
 
-        status.textContent =
-            "Loading tasks...";
-
-
-        const response =
-            await fetch(
-                API_URL,
-                {
-                    method: "GET",
-
-                    headers: {
-                        "Authorization":
-                            `Bearer ${accessToken}`
-                    }
-                }
-            );
-
+        const response = await fetch(API_URL, {
+            method: "GET",
+            headers: { "Authorization": `Bearer ${accessToken}` }
+        });
 
         if (!response.ok) {
-
-            const errorText =
-                await response.text();
-
-            console.error(
-                "GET Error:",
-                response.status,
-                errorText
-            );
-
-            throw new Error(
-                `GET Error: ${response.status}`
-            );
+            console.error("GET Error:", response.status, await response.text());
+            throw new Error(`GET Error: ${response.status}`);
         }
 
+        const data = await response.json();
+        console.log("Raw GET response:", data);
 
-        allTasks =
-            await response.json();
-
-
-        console.log(
-            "User tasks:",
-            allTasks
-        );
-
-
+        allTasks = normalizeTasks(data);
         renderTasks();
 
-
-        status.textContent =
-            "Tasks loaded successfully.";
-
-
+        if (!silent) setStatus("Tasks loaded successfully.");
     } catch (error) {
-
-        console.error(
-            "Load tasks error:",
-            error
-        );
-
-        status.textContent =
-            "Failed to load tasks.";
+        console.error("Load tasks error:", error);
+        setStatus("Failed to load tasks.");
     }
 }
 
+// ================================
+// ADD TASK
+// ================================
+async function addTask() {
+    const accessToken = getToken();
+
+    if (!accessToken) {
+        setStatus("Please login first to add a task.");
+        return;
+    }
+
+    const title = taskInput.value.trim();
+    if (!title) {
+        setStatus("Please enter a task.");
+        return;
+    }
+
+    try {
+        setStatus("Adding task...");
+
+        const response = await fetch(API_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({ title: title })
+        });
+
+        if (!response.ok) {
+            console.error("POST Error:", response.status, await response.text());
+            throw new Error(`POST Error: ${response.status}`);
+        }
+
+        let data = null;
+        try { data = await response.json(); } catch { /* empty body is fine */ }
+        console.log("Raw POST response:", data);
+
+        // Clear the input AND the search, so the new task is not filtered out
+        taskInput.value = "";
+        searchInput.value = "";
+
+        const newTask = extractTask(data);
+
+        if (newTask) {
+            allTasks.push(newTask);
+            renderTasks();
+        } else {
+            // API didn't return the task itself -> reload from the server
+            await loadTasks(true);
+        }
+
+        setStatus("Task added successfully.");
+    } catch (error) {
+        console.error("Add task error:", error);
+        setStatus("Failed to add task.");
+    }
+}
 
 // ================================
-// RENDER TASKS
+// RENDER TASKS (with search)
 // ================================
-
 function renderTasks() {
+    const searchText = searchInput.value.trim().toLowerCase();
 
-    const searchText =
-        searchInput.value
-            .trim()
-            .toLowerCase();
-
-
-    let tasksToShow;
-
-
-    // ============================
-    // No Search
-    // ============================
-
-    if (searchText === "") {
-
-        tasksToShow =
-            allTasks;
-
-    }
-
-    // ============================
-    // Search Active
-    // ============================
-
-    else {
-
-        tasksToShow =
-            allTasks.filter(function (task) {
-
-                const title =
-                    String(task.title || "")
-                        .toLowerCase();
-
-
-                return title.includes(
-                    searchText
-                );
-            });
-    }
-
-
-    // ============================
-    // Clear List
-    // ============================
+    const tasksToShow = searchText === ""
+        ? allTasks
+        : allTasks.filter(task =>
+            String(task.title || "").toLowerCase().includes(searchText)
+          );
 
     taskList.innerHTML = "";
 
-
-    // ============================
-    // No Results
-    // ============================
-
     if (tasksToShow.length === 0) {
-
-        const li =
-            document.createElement("li");
-
-
-        li.textContent =
-            searchText
-                ? "No tasks found."
-                : "No tasks yet.";
-
-
-        li.classList.add(
-            "empty-task"
-        );
-
-
+        const li = document.createElement("li");
+        li.textContent = searchText ? "No tasks found." : "No tasks yet.";
+        li.classList.add("empty-task");
         taskList.appendChild(li);
-
-
         updateTaskCount(0);
-
         return;
     }
 
-
-    // ============================
-    // Display Tasks
-    // ============================
-
-    tasksToShow.forEach(function (task) {
-
-        const li =
-            document.createElement("li");
-
-
-        li.textContent =
-            task.title;
-
-
+    tasksToShow.forEach(task => {
+        const li = document.createElement("li");
+        li.textContent = task.title;
         taskList.appendChild(li);
-
     });
 
-
-    updateTaskCount(
-        tasksToShow.length
-    );
+    updateTaskCount(tasksToShow.length);
 }
-
-
-// ================================
-// SEARCH
-// ================================
-
-searchInput.addEventListener(
-    "input",
-    function () {
-
-        renderTasks();
-
-    }
-);
-
-
-// ================================
-// Task Count
-// ================================
 
 function updateTaskCount(count) {
-
-    if (count === 1) {
-
-        taskCount.textContent =
-            "1 task";
-
-    } else {
-
-        taskCount.textContent =
-            `${count} tasks`;
-    }
+    taskCount.textContent = count === 1 ? "1 task" : `${count} tasks`;
 }
 
-
 // ================================
-// Start Application
+// Start Application (after DOM is ready)
 // ================================
+document.addEventListener("DOMContentLoaded", async function () {
+    loginButton   = document.getElementById("loginButton");
+    status        = document.getElementById("status");
+    addTaskButton = document.getElementById("addTask");
+    taskInput     = document.getElementById("taskInput");
+    taskList      = document.getElementById("taskList");
+    taskCount     = document.getElementById("taskCount");
+    searchInput   = document.getElementById("searchInput");
 
-handleCallback();
+    // Tell us exactly which id is missing/misspelled in the HTML
+    const required = { loginButton, status, addTaskButton, taskInput, taskList, taskCount, searchInput };
+    const missing = Object.keys(required).filter(k => !required[k]);
+    if (missing.length) {
+        console.error("Missing HTML elements with these ids:", missing);
+        alert("Missing HTML ids: " + missing.join(", "));
+        return;
+    }
 
-checkSession();
+    loginButton.addEventListener("click", login);
+    addTaskButton.addEventListener("click", addTask);
+    searchInput.addEventListener("input", renderTasks);
+
+    // Pressing Enter in the task input adds the task
+    taskInput.addEventListener("keydown", e => { if (e.key === "Enter") addTask(); });
+
+    const handled = await handleCallback();
+    if (!handled) await checkSession();
+});
