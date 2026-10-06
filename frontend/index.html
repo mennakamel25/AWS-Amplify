@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Task Manager</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <main class="container">
+
+        <h1>Task Manager</h1>
+
+        <p id="status">
+            Welcome to the AWS Serverless Task Manager
+        </p>
+
+        <div class="task-form">
+            <input
+                type="text"
+                id="taskInput"
+                placeholder="Enter a task"
+            >
+
+            <button id="addTask">
+                Add Task
+            </button>
+        </div>
+
+        <ul id="taskList"></ul>
+
+    </main>
+
+    <script src="app.js"></script>
+
+</body>
+</html>
