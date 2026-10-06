@@ -124,17 +124,14 @@ async function handleCallback() {
 
 
         // Update UI
-        status.textContent =
-            "You are logged in.";
-
-        loginButton.textContent =
-            "Logged in";
-
-        loginButton.disabled =
-            true;
+        showLoggedInState();
 
 
         console.log("Login successful");
+
+
+        // Load user's tasks
+        await loadTasks();
 
 
     } catch (error) {
@@ -156,7 +153,7 @@ async function handleCallback() {
 // Check Existing Session
 // ================================
 
-function checkSession() {
+async function checkSession() {
 
     const accessToken =
         sessionStorage.getItem("access_token");
@@ -164,18 +161,109 @@ function checkSession() {
 
     if (accessToken) {
 
-        status.textContent =
-            "You are logged in.";
+        showLoggedInState();
 
-        loginButton.textContent =
-            "Logged in";
-
-        loginButton.disabled =
-            true;
+        await loadTasks();
 
     }
 
 }
+
+
+// ================================
+// Logged In UI
+// ================================
+
+function showLoggedInState() {
+
+    status.textContent =
+        "You are logged in.";
+
+    loginButton.textContent =
+        "Sign Out";
+
+    loginButton.disabled =
+        false;
+
+    loginButton.classList.add(
+        "logout-btn"
+    );
+
+}
+
+
+// ================================
+// Sign Out
+// ================================
+
+function signOut() {
+
+    // Remove local tokens
+    sessionStorage.removeItem(
+        "access_token"
+    );
+
+    sessionStorage.removeItem(
+        "id_token"
+    );
+
+
+    // Clear tasks from UI
+    taskList.innerHTML = "";
+
+    updateTaskCount();
+
+
+    // Reset status
+    status.textContent =
+        "You are logged out.";
+
+
+    // Redirect to Cognito logout
+    const logoutUrl =
+        `${COGNITO_DOMAIN}/logout` +
+        `?client_id=${CLIENT_ID}` +
+        `&logout_uri=${encodeURIComponent(REDIRECT_URI)}`;
+
+
+    window.location.href =
+        logoutUrl;
+
+}
+
+
+// ================================
+// Login / Sign Out Button
+// ================================
+
+loginButton.addEventListener(
+    "click",
+    () => {
+
+        const accessToken =
+            sessionStorage.getItem("access_token");
+
+
+        if (accessToken) {
+
+            signOut();
+
+        } else {
+
+            const loginUrl =
+                `${COGNITO_DOMAIN}/login` +
+                `?client_id=${CLIENT_ID}` +
+                `&response_type=code` +
+                `&scope=email+openid+phone` +
+                `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+
+            window.location.href =
+                loginUrl;
+
+        }
+
+    }
+);
 
 
 // ================================
@@ -186,14 +274,11 @@ addTaskButton.addEventListener(
     "click",
     async () => {
 
-        // ============================
-        // Check Login
-        // ============================
-
         const accessToken =
             sessionStorage.getItem("access_token");
 
 
+        // User must be logged in
         if (!accessToken) {
 
             status.textContent =
@@ -203,10 +288,6 @@ addTaskButton.addEventListener(
 
         }
 
-
-        // ============================
-        // Get Task
-        // ============================
 
         const title =
             taskInput.value.trim();
@@ -222,23 +303,11 @@ addTaskButton.addEventListener(
         }
 
 
-        // ============================
-        // Generate Task ID
-        // ============================
-
-        const taskId =
-            Date.now().toString();
-
-
         try {
 
             status.textContent =
                 "Adding task...";
 
-
-            // ========================
-            // POST /tasks
-            // ========================
 
             const response =
                 await fetch(
@@ -255,16 +324,11 @@ addTaskButton.addEventListener(
                         },
 
                         body: JSON.stringify({
-                            taskId: taskId,
                             title: title
                         })
                     }
                 );
 
-
-            // ========================
-            // Check Response
-            // ========================
 
             if (!response.ok) {
 
@@ -284,10 +348,6 @@ addTaskButton.addEventListener(
             }
 
 
-            // ========================
-            // Get Lambda Response
-            // ========================
-
             const task =
                 await response.json();
 
@@ -298,10 +358,7 @@ addTaskButton.addEventListener(
             );
 
 
-            // ========================
-            // Show Task in UI
-            // ========================
-
+            // Add task to UI
             const li =
                 document.createElement("li");
 
@@ -311,16 +368,7 @@ addTaskButton.addEventListener(
             taskList.appendChild(li);
 
 
-            // ========================
-            // Clear Input
-            // ========================
-
             taskInput.value = "";
-
-
-            // ========================
-            // Update Counter
-            // ========================
 
             updateTaskCount();
 
@@ -343,6 +391,103 @@ addTaskButton.addEventListener(
 
     }
 );
+
+
+// ================================
+// GET /tasks
+// ================================
+
+async function loadTasks() {
+
+    const accessToken =
+        sessionStorage.getItem("access_token");
+
+
+    if (!accessToken) {
+        return;
+    }
+
+
+    try {
+
+        status.textContent =
+            "Loading tasks...";
+
+
+        const response =
+            await fetch(
+                API_URL,
+                {
+                    method: "GET",
+
+                    headers: {
+                        "Authorization":
+                            `Bearer ${accessToken}`
+                    }
+                }
+            );
+
+
+        if (!response.ok) {
+
+            const errorText =
+                await response.text();
+
+            console.error(
+                "GET API Error:",
+                response.status,
+                errorText
+            );
+
+            throw new Error(
+                `GET API Error: ${response.status}`
+            );
+
+        }
+
+
+        const tasks =
+            await response.json();
+
+
+        // Clear current list
+        taskList.innerHTML = "";
+
+
+        // Display tasks
+        tasks.forEach(task => {
+
+            const li =
+                document.createElement("li");
+
+            li.textContent =
+                task.title;
+
+            taskList.appendChild(li);
+
+        });
+
+
+        updateTaskCount();
+
+
+        status.textContent =
+            "Tasks loaded successfully.";
+
+
+    } catch (error) {
+
+        console.error(
+            "Load tasks error:",
+            error
+        );
+
+        status.textContent =
+            "Failed to load tasks.";
+
+    }
+
+}
 
 
 // ================================
@@ -369,4 +514,5 @@ function updateTaskCount() {
 
 handleCallback();
 
-checkSession()
+checkSRefreshRefreshession();
+
