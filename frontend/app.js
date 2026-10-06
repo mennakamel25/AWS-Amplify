@@ -3,7 +3,7 @@
 // ================================
 const COGNITO_DOMAIN = "https://us-east-15pnhohgct.auth.us-east-1.amazoncognito.com";
 const CLIENT_ID = "ol5smuff05sa55cpbi4us96lh";
-const REDIRECT_URI = "https://main.d1pgn8um2fjyka.amplifyapp.com/";
+const REDIRECT_URI = "https://www.gbgcafe.click/";
 const API_URL = "https://lcjln7lx48.execute-api.us-east-1.amazonaws.com/tasks";
 
 // ================================
