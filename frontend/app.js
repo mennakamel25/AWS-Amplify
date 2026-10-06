@@ -2,13 +2,33 @@
 // DOM Elements
 // ================================
 
-const loginButton = document.getElementById("loginButton");
-const status = document.getElementById("status");
+const loginButton =
+    document.getElementById("loginButton");
 
-const addTaskButton = document.getElementById("addTask");
-const taskInput = document.getElementById("taskInput");
-const taskList = document.getElementById("taskList");
-const taskCount = document.getElementById("taskCount");
+const status =
+    document.getElementById("status");
+
+const addTaskButton =
+    document.getElementById("addTask");
+
+const taskInput =
+    document.getElementById("taskInput");
+
+const taskList =
+    document.getElementById("taskList");
+
+const taskCount =
+    document.getElementById("taskCount");
+
+const searchInput =
+    document.getElementById("searchInput");
+
+
+// ================================
+// Store All User Tasks
+// ================================
+
+let allTasks = [];
 
 
 // ================================
@@ -31,205 +51,6 @@ const REDIRECT_URI =
 
 const API_URL =
     "https://lcjln7lx48.execute-api.us-east-1.amazonaws.com/tasks";
-
-
-// ================================
-// Login
-// ================================
-
-loginButton.addEventListener("click", () => {
-
-    const loginUrl =
-        `${COGNITO_DOMAIN}/login` +
-        `?client_id=${CLIENT_ID}` +
-        `&response_type=code` +
-        `&scope=email+openid+phone` +
-        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
-
-    window.location.href = loginUrl;
-
-});
-
-
-// ================================
-// Handle Cognito Callback
-// ================================
-
-async function handleCallback() {
-
-    const params =
-        new URLSearchParams(window.location.search);
-
-    const code =
-        params.get("code");
-
-    if (!code) {
-        return;
-    }
-
-    try {
-
-        const response =
-            await fetch(
-                `${COGNITO_DOMAIN}/oauth2/token`,
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type":
-                            "application/x-www-form-urlencoded"
-                    },
-
-                    body: new URLSearchParams({
-                        grant_type: "authorization_code",
-                        client_id: CLIENT_ID,
-                        code: code,
-                        redirect_uri: REDIRECT_URI
-                    })
-                }
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                `Token request failed: ${response.status}`
-            );
-
-        }
-
-
-        const tokens =
-            await response.json();
-
-
-        // Save tokens
-        sessionStorage.setItem(
-            "access_token",
-            tokens.access_token
-        );
-
-        sessionStorage.setItem(
-            "id_token",
-            tokens.id_token
-        );
-
-
-        // Remove ?code= from URL
-        window.history.replaceState(
-            {},
-            document.title,
-            REDIRECT_URI
-        );
-
-
-        // Update UI
-        showLoggedInState();
-
-
-        console.log("Login successful");
-
-
-        // Load user's tasks
-        await loadTasks();
-
-
-    } catch (error) {
-
-        console.error(
-            "Login error:",
-            error
-        );
-
-        status.textContent =
-            "Login failed.";
-
-    }
-
-}
-
-
-// ================================
-// Check Existing Session
-// ================================
-
-async function checkSession() {
-
-    const accessToken =
-        sessionStorage.getItem("access_token");
-
-
-    if (accessToken) {
-
-        showLoggedInState();
-
-        await loadTasks();
-
-    }
-
-}
-
-
-// ================================
-// Logged In UI
-// ================================
-
-function showLoggedInState() {
-
-    status.textContent =
-        "You are logged in.";
-
-    loginButton.textContent =
-        "Sign Out";
-
-    loginButton.disabled =
-        false;
-
-    loginButton.classList.add(
-        "logout-btn"
-    );
-
-}
-
-
-// ================================
-// Sign Out
-// ================================
-
-function signOut() {
-
-    // Remove local tokens
-    sessionStorage.removeItem(
-        "access_token"
-    );
-
-    sessionStorage.removeItem(
-        "id_token"
-    );
-
-
-    // Clear tasks from UI
-    taskList.innerHTML = "";
-
-    updateTaskCount();
-
-
-    // Reset status
-    status.textContent =
-        "You are logged out.";
-
-
-    // Redirect to Cognito logout
-    const logoutUrl =
-        `${COGNITO_DOMAIN}/logout` +
-        `?client_id=${CLIENT_ID}` +
-        `&logout_uri=${encodeURIComponent(REDIRECT_URI)}`;
-
-
-    window.location.href =
-        logoutUrl;
-
-}
 
 
 // ================================
@@ -259,11 +80,198 @@ loginButton.addEventListener(
 
             window.location.href =
                 loginUrl;
-
         }
-
     }
 );
+
+
+// ================================
+// Handle Cognito Callback
+// ================================
+
+async function handleCallback() {
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    const code =
+        params.get("code");
+
+
+    if (!code) {
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                `${COGNITO_DOMAIN}/oauth2/token`,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/x-www-form-urlencoded"
+                    },
+
+                    body: new URLSearchParams({
+                        grant_type:
+                            "authorization_code",
+
+                        client_id:
+                            CLIENT_ID,
+
+                        code:
+                            code,
+
+                        redirect_uri:
+                            REDIRECT_URI
+                    })
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Token request failed: ${response.status}`
+            );
+        }
+
+
+        const tokens =
+            await response.json();
+
+
+        // Save tokens
+        sessionStorage.setItem(
+            "access_token",
+            tokens.access_token
+        );
+
+        sessionStorage.setItem(
+            "id_token",
+            tokens.id_token
+        );
+
+
+        // Remove ?code= from URL
+        window.history.replaceState(
+            {},
+            document.title,
+            REDIRECT_URI
+        );
+
+
+        showLoggedInState();
+
+
+        console.log(
+            "Login successful"
+        );
+
+
+        // Load user's tasks
+        await loadTasks();
+
+
+    } catch (error) {
+
+        console.error(
+            "Login error:",
+            error
+        );
+
+        status.textContent =
+            "Login failed.";
+    }
+}
+
+
+// ================================
+// Check Existing Session
+// ================================
+
+async function checkSession() {
+
+    const accessToken =
+        sessionStorage.getItem(
+            "access_token"
+        );
+
+
+    if (accessToken) {
+
+        showLoggedInState();
+
+        await loadTasks();
+    }
+}
+
+
+// ================================
+// Logged In UI
+// ================================
+
+function showLoggedInState() {
+
+    status.textContent =
+        "You are logged in.";
+
+    loginButton.textContent =
+        "Sign Out";
+
+    loginButton.disabled =
+        false;
+}
+
+
+// ================================
+// Sign Out
+// ================================
+
+function signOut() {
+
+    // Remove tokens
+    sessionStorage.removeItem(
+        "access_token"
+    );
+
+    sessionStorage.removeItem(
+        "id_token"
+    );
+
+
+    // Clear tasks
+    allTasks = [];
+
+    taskList.innerHTML = "";
+
+    updateTaskCount();
+
+
+    // Clear search
+    searchInput.value = "";
+
+
+    status.textContent =
+        "You are logged out.";
+
+
+    // Cognito logout
+    const logoutUrl =
+        `${COGNITO_DOMAIN}/logout` +
+        `?client_id=${CLIENT_ID}` +
+        `&logout_uri=${encodeURIComponent(REDIRECT_URI)}`;
+
+
+    window.location.href =
+        logoutUrl;
+}
 
 
 // ================================
@@ -275,7 +283,9 @@ addTaskButton.addEventListener(
     async () => {
 
         const accessToken =
-            sessionStorage.getItem("access_token");
+            sessionStorage.getItem(
+                "access_token"
+            );
 
 
         // User must be logged in
@@ -285,7 +295,6 @@ addTaskButton.addEventListener(
                 "Please login first to add a task.";
 
             return;
-
         }
 
 
@@ -299,7 +308,6 @@ addTaskButton.addEventListener(
                 "Please enter a task.";
 
             return;
-
         }
 
 
@@ -344,7 +352,6 @@ addTaskButton.addEventListener(
                 throw new Error(
                     `API Error: ${response.status}`
                 );
-
             }
 
 
@@ -358,19 +365,17 @@ addTaskButton.addEventListener(
             );
 
 
-            // Add task to UI
-            const li =
-                document.createElement("li");
-
-            li.textContent =
-                task.title;
-
-            taskList.appendChild(li);
+            // Add new task
+            // to our local task list
+            allTasks.push(task);
 
 
+            // Display tasks
+            displayTasks(allTasks);
+
+
+            // Clear input
             taskInput.value = "";
-
-            updateTaskCount();
 
 
             status.textContent =
@@ -386,9 +391,7 @@ addTaskButton.addEventListener(
 
             status.textContent =
                 "Failed to add task.";
-
         }
-
     }
 );
 
@@ -400,7 +403,9 @@ addTaskButton.addEventListener(
 async function loadTasks() {
 
     const accessToken =
-        sessionStorage.getItem("access_token");
+        sessionStorage.getItem(
+            "access_token"
+        );
 
 
     if (!accessToken) {
@@ -442,33 +447,16 @@ async function loadTasks() {
             throw new Error(
                 `GET API Error: ${response.status}`
             );
-
         }
 
 
-        const tasks =
+        // Store user's tasks
+        allTasks =
             await response.json();
 
 
-        // Clear current list
-        taskList.innerHTML = "";
-
-
-        // Display tasks
-        tasks.forEach(task => {
-
-            const li =
-                document.createElement("li");
-
-            li.textContent =
-                task.title;
-
-            taskList.appendChild(li);
-
-        });
-
-
-        updateTaskCount();
+        // Display all tasks
+        displayTasks(allTasks);
 
 
         status.textContent =
@@ -484,10 +472,65 @@ async function loadTasks() {
 
         status.textContent =
             "Failed to load tasks.";
-
     }
-
 }
+
+
+// ================================
+// Display Tasks
+// ================================
+
+function displayTasks(tasks) {
+
+    taskList.innerHTML = "";
+
+
+    tasks.forEach(task => {
+
+        const li =
+            document.createElement("li");
+
+
+        li.textContent =
+            task.title;
+
+
+        taskList.appendChild(li);
+
+    });
+
+
+    updateTaskCount();
+}
+
+
+// ================================
+// Search Tasks
+// ================================
+
+searchInput.addEventListener(
+    "input",
+    () => {
+
+        const searchText =
+            searchInput.value
+                .trim()
+                .toLowerCase();
+
+
+        const filteredTasks =
+            allTasks.filter(task =>
+
+                task.title
+                    .toLowerCase()
+                    .includes(searchText)
+
+            );
+
+
+        displayTasks(filteredTasks);
+    }
+);
 
 
 // ================================
@@ -504,7 +547,6 @@ function updateTaskCount() {
         count === 1
             ? "1 task"
             : `${count} tasks`;
-
 }
 
 
@@ -514,5 +556,4 @@ function updateTaskCount() {
 
 handleCallback();
 
-checkSRefreshRefreshession();
-
+checkSession();
