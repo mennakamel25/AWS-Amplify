@@ -2,37 +2,20 @@
 // DOM Elements
 // ================================
 
-const loginButton =
-    document.getElementById("loginButton");
+const loginButton = document.getElementById("loginButton");
+const status = document.getElementById("status");
 
-const status =
-    document.getElementById("status");
+const addTaskButton = document.getElementById("addTask");
+const taskInput = document.getElementById("taskInput");
 
-const addTaskButton =
-    document.getElementById("addTask");
+const taskList = document.getElementById("taskList");
+const taskCount = document.getElementById("taskCount");
 
-const taskInput =
-    document.getElementById("taskInput");
-
-const taskList =
-    document.getElementById("taskList");
-
-const taskCount =
-    document.getElementById("taskCount");
-
-const searchInput =
-    document.getElementById("searchInput");
+const searchInput = document.getElementById("searchInput");
 
 
 // ================================
-// Store All User Tasks
-// ================================
-
-let allTasks = [];
-
-
-// ================================
-// Cognito Configuration
+// Configuration
 // ================================
 
 const COGNITO_DOMAIN =
@@ -44,68 +27,64 @@ const CLIENT_ID =
 const REDIRECT_URI =
     "https://main.d1pgn8um2fjyka.amplifyapp.com/";
 
-
-// ================================
-// API Gateway
-// ================================
-
 const API_URL =
     "https://lcjln7lx48.execute-api.us-east-1.amazonaws.com/tasks";
 
 
 // ================================
-// Login / Sign Out Button
+// Tasks
 // ================================
 
-loginButton.addEventListener(
-    "click",
-    () => {
-
-        const accessToken =
-            sessionStorage.getItem("access_token");
+// All tasks returned from backend
+let allTasks = [];
 
 
-        if (accessToken) {
+// ================================
+// Login Button
+// ================================
 
-            signOut();
+loginButton.addEventListener("click", () => {
 
-        } else {
+    const accessToken =
+        sessionStorage.getItem("access_token");
 
-            const loginUrl =
-                `${COGNITO_DOMAIN}/login` +
-                `?client_id=${CLIENT_ID}` +
-                `&response_type=code` +
-                `&scope=email+openid+phone` +
-                `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+    if (accessToken) {
 
-            window.location.href =
-                loginUrl;
-        }
+        signOut();
+
+    } else {
+
+        const loginUrl =
+            `${COGNITO_DOMAIN}/login` +
+            `?client_id=${CLIENT_ID}` +
+            `&response_type=code` +
+            `&scope=email+openid+phone` +
+            `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+
+        window.location.href = loginUrl;
     }
-);
+});
 
 
 // ================================
-// Handle Cognito Callback
+// Cognito Callback
 // ================================
 
 async function handleCallback() {
 
     const params =
-        new URLSearchParams(
-            window.location.search
-        );
+        new URLSearchParams(window.location.search);
 
     const code =
         params.get("code");
-
 
     if (!code) {
         return;
     }
 
-
     try {
+
+        status.textContent = "Signing in...";
 
         const response =
             await fetch(
@@ -147,7 +126,6 @@ async function handleCallback() {
             await response.json();
 
 
-        // Save tokens
         sessionStorage.setItem(
             "access_token",
             tokens.access_token
@@ -169,13 +147,9 @@ async function handleCallback() {
 
         showLoggedInState();
 
-
-        console.log(
-            "Login successful"
-        );
+        console.log("Login successful");
 
 
-        // Load user's tasks
         await loadTasks();
 
 
@@ -193,16 +167,13 @@ async function handleCallback() {
 
 
 // ================================
-// Check Existing Session
+// Check Session
 // ================================
 
 async function checkSession() {
 
     const accessToken =
-        sessionStorage.getItem(
-            "access_token"
-        );
-
+        sessionStorage.getItem("access_token");
 
     if (accessToken) {
 
@@ -219,14 +190,11 @@ async function checkSession() {
 
 function showLoggedInState() {
 
-    status.textContent =
-        "You are logged in.";
-
     loginButton.textContent =
         "Sign Out";
 
-    loginButton.disabled =
-        false;
+    status.textContent =
+        "You are logged in.";
 }
 
 
@@ -236,7 +204,6 @@ function showLoggedInState() {
 
 function signOut() {
 
-    // Remove tokens
     sessionStorage.removeItem(
         "access_token"
     );
@@ -246,23 +213,19 @@ function signOut() {
     );
 
 
-    // Clear tasks
     allTasks = [];
 
     taskList.innerHTML = "";
 
-    updateTaskCount();
+    taskCount.textContent =
+        "0 tasks";
 
-
-    // Clear search
     searchInput.value = "";
-
 
     status.textContent =
         "You are logged out.";
 
 
-    // Cognito logout
     const logoutUrl =
         `${COGNITO_DOMAIN}/logout` +
         `?client_id=${CLIENT_ID}` +
@@ -283,12 +246,10 @@ addTaskButton.addEventListener(
     async () => {
 
         const accessToken =
-            sessionStorage.getItem(
-                "access_token"
-            );
+            sessionStorage.getItem("access_token");
 
 
-        // User must be logged in
+        // Must be logged in
         if (!accessToken) {
 
             status.textContent =
@@ -355,27 +316,27 @@ addTaskButton.addEventListener(
             }
 
 
-            const task =
+            const newTask =
                 await response.json();
 
 
             console.log(
                 "Task created:",
-                task
+                newTask
             );
 
 
-            // Add new task
-            // to our local task list
-            allTasks.push(task);
-
-
-            // Display tasks
-            displayTasks(allTasks);
+            // Add task to all tasks
+            allTasks.push(newTask);
 
 
             // Clear input
             taskInput.value = "";
+
+
+            // IMPORTANT:
+            // Re-apply current search
+            renderTasks();
 
 
             status.textContent =
@@ -397,15 +358,13 @@ addTaskButton.addEventListener(
 
 
 // ================================
-// GET /tasks
+// Load Tasks
 // ================================
 
 async function loadTasks() {
 
     const accessToken =
-        sessionStorage.getItem(
-            "access_token"
-        );
+        sessionStorage.getItem("access_token");
 
 
     if (!accessToken) {
@@ -450,13 +409,12 @@ async function loadTasks() {
         }
 
 
-        // Store user's tasks
         allTasks =
             await response.json();
 
 
-        // Display all tasks
-        displayTasks(allTasks);
+        // Display tasks
+        renderTasks();
 
 
         status.textContent =
@@ -477,71 +435,106 @@ async function loadTasks() {
 
 
 // ================================
-// Display Tasks
+// Render Tasks
 // ================================
 
-function displayTasks(tasks) {
+function renderTasks() {
 
+    const searchText =
+        searchInput.value
+            .trim()
+            .toLowerCase();
+
+
+    // ============================
+    // Filter
+    // ============================
+
+    const filteredTasks =
+        allTasks.filter(task => {
+
+            const title =
+                String(task.title || "")
+                    .toLowerCase();
+
+            return title.includes(searchText);
+        });
+
+
+    // Clear current list
     taskList.innerHTML = "";
 
 
-    tasks.forEach(task => {
+    // ============================
+    // No Results
+    // ============================
+
+    if (filteredTasks.length === 0) {
+
+        const emptyMessage =
+            document.createElement("li");
+
+        emptyMessage.textContent =
+            searchText
+                ? "No tasks found."
+                : "No tasks yet.";
+
+        emptyMessage.classList.add(
+            "empty-task"
+        );
+
+        taskList.appendChild(
+            emptyMessage
+        );
+
+
+        updateTaskCount(0);
+
+        return;
+    }
+
+
+    // ============================
+    // Display Filtered Tasks
+    // ============================
+
+    filteredTasks.forEach(task => {
 
         const li =
             document.createElement("li");
 
-
         li.textContent =
             task.title;
 
-
         taskList.appendChild(li);
-
     });
 
 
-    updateTaskCount();
+    // Count only visible tasks
+    updateTaskCount(
+        filteredTasks.length
+    );
 }
 
 
 // ================================
-// Search Tasks
+// Search
 // ================================
 
 searchInput.addEventListener(
     "input",
     () => {
 
-        const searchText =
-            searchInput.value
-                .trim()
-                .toLowerCase();
-
-
-        const filteredTasks =
-            allTasks.filter(task =>
-
-                task.title
-                    .toLowerCase()
-                    .includes(searchText)
-
-            );
-
-
-        displayTasks(filteredTasks);
+        renderTasks();
     }
 );
 
 
 // ================================
-// Update Task Count
+// Task Count
 // ================================
 
-function updateTaskCount() {
-
-    const count =
-        taskList.children.length;
-
+function updateTaskCount(count) {
 
     taskCount.textContent =
         count === 1
