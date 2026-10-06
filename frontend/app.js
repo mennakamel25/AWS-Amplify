@@ -1,6 +1,11 @@
 const loginButton = document.getElementById("loginButton");
 const status = document.getElementById("status");
 
+const addTaskButton = document.getElementById("addTask");
+const taskInput = document.getElementById("taskInput");
+const taskList = document.getElementById("taskList");
+const taskCount = document.getElementById("taskCount");
+
 
 // ================================
 // Cognito Configuration
@@ -40,7 +45,9 @@ loginButton.addEventListener("click", () => {
 
 async function handleCallback() {
 
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(
+        window.location.search
+    );
 
     const code = params.get("code");
 
@@ -70,12 +77,13 @@ async function handleCallback() {
         );
 
         if (!response.ok) {
-            throw new Error("Failed to exchange authorization code");
+            throw new Error(
+                "Failed to exchange authorization code"
+            );
         }
 
         const tokens = await response.json();
 
-        // Store tokens temporarily
         sessionStorage.setItem(
             "access_token",
             tokens.access_token
@@ -86,22 +94,21 @@ async function handleCallback() {
             tokens.id_token
         );
 
-        // Remove ?code=... from URL
         window.history.replaceState(
             {},
             document.title,
             REDIRECT_URI
         );
 
-        // Update UI
-        status.textContent = "You are logged in.";
+        status.textContent =
+            "You are logged in.";
 
-        loginButton.textContent = "Logged in";
+        loginButton.textContent =
+            "Logged in";
 
         loginButton.disabled = true;
 
         console.log("Login successful");
-        console.log("Access Token:", tokens.access_token);
 
     } catch (error) {
 
@@ -138,7 +145,48 @@ function checkSession() {
 
 
 // ================================
-// Start
+// Add Task
+// ================================
+
+addTaskButton.addEventListener("click", () => {
+
+    const task = taskInput.value.trim();
+
+    if (!task) {
+        return;
+    }
+
+    const li = document.createElement("li");
+
+    li.textContent = task;
+
+    taskList.appendChild(li);
+
+    taskInput.value = "";
+
+    updateTaskCount();
+
+});
+
+
+// ================================
+// Update Task Count
+// ================================
+
+function updateTaskCount() {
+
+    const count = taskList.children.length;
+
+    taskCount.textContent =
+        count === 1
+            ? "1 task"
+            : `${count} tasks`;
+
+}
+
+
+// ================================
+// Start Application
 // ================================
 
 handleCallback();
