@@ -1,10 +1,12 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Task Manager</title>
+    <title>AWS Task Manager</title>
 
     <link rel="stylesheet" href="style.css">
 </head>
@@ -13,29 +15,55 @@
 
     <main class="container">
 
-        <h1>Task Manager</h1>
+        <div class="header">
+            <div>
+                <h1>Task Manager</h1>
+                <p>Manage your tasks with AWS Serverless</p>
+            </div>
 
-        <p id="status">
-            Welcome to the AWS Serverless Task Manager
-        </p>
-
-        <div class="task-form">
-            <input
-                type="text"
-                id="taskInput"
-                placeholder="Enter a task"
-            >
-
-            <button id="addTask">
-                Add Task
+            <button id="loginButton" class="login-btn">
+                Login
             </button>
         </div>
 
-        <ul id="taskList"></ul>
+        <div class="status-card">
+            <span class="status-dot"></span>
+
+            <p id="status">
+                Welcome to the AWS Serverless Task Manager
+            </p>
+        </div>
+
+        <div class="task-form">
+
+            <input
+                type="text"
+                id="taskInput"
+                placeholder="What do you need to do?"
+            >
+
+            <button id="addTask" class="add-btn">
+                + Add Task
+            </button>
+
+        </div>
+
+        <section class="tasks-section">
+
+            <div class="tasks-header">
+                <h2>My Tasks</h2>
+                <span id="taskCount">0 tasks</span>
+            </div>
+
+            <ul id="taskList"></ul>
+
+        </section>
 
     </main>
-    <script src="https://unpkg.com/aws-amplify@6/dist/aws-amplify.min.js"></script>
+
     <script src="app.js"></script>
 
 </body>
+
 </html>
+```
