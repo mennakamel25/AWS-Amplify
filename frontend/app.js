@@ -1,69 +1,146 @@
-
 const loginButton = document.getElementById("loginButton");
-const addTaskButton = document.getElementById("addTask");
-const taskInput = document.getElementById("taskInput");
-const taskList = document.getElementById("taskList");
-const taskCount = document.getElementById("taskCount");
+const status = document.getElementById("status");
 
 
-/*
- * Cognito Hosted UI
- */
+// ================================
+// Cognito Configuration
+// ================================
 
-const cognitoLoginUrl =
-    "https://us-east-15pnhohgct.auth.us-east-1.amazoncognito.com/login" +
-    "?client_id=ol5smuff05sa55cpbi4us96lh" +
-    "&response_type=code" +
-    "&scope=email+openid+phone" +
-    "&redirect_uri=" +
-    encodeURIComponent(
-        "https://main.d1pgn8um2fjyka.amplifyapp.com/"
-    );
+const COGNITO_DOMAIN =
+    "https://us-east-15pnhohgct.auth.us-east-1.amazoncognito.com";
 
+const CLIENT_ID =
+    "ol5smuff05sa55cpbi4us96lh";
+
+const REDIRECT_URI =
+    "https://main.d1pgn8um2fjyka.amplifyapp.com/";
+
+
+// ================================
+// Login
+// ================================
 
 loginButton.addEventListener("click", () => {
 
-    window.location.href = cognitoLoginUrl;
+    const loginUrl =
+        `${COGNITO_DOMAIN}/login` +
+        `?client_id=${CLIENT_ID}` +
+        `&response_type=code` +
+        `&scope=email+openid+phone` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+
+    window.location.href = loginUrl;
 
 });
 
 
-/*
- * Add Task
- */
+// ================================
+// Handle Cognito Callback
+// ================================
 
-addTaskButton.addEventListener("click", () => {
+async function handleCallback() {
 
-    const task = taskInput.value.trim();
+    const params = new URLSearchParams(window.location.search);
 
-    if (!task) {
+    const code = params.get("code");
+
+    if (!code) {
         return;
     }
 
-    const li = document.createElement("li");
+    try {
 
-    li.textContent = task;
+        const response = await fetch(
+            `${COGNITO_DOMAIN}/oauth2/token`,
+            {
+                method: "POST",
 
-    taskList.appendChild(li);
+                headers: {
+                    "Content-Type":
+                        "application/x-www-form-urlencoded"
+                },
 
-    taskInput.value = "";
+                body: new URLSearchParams({
+                    grant_type: "authorization_code",
+                    client_id: CLIENT_ID,
+                    code: code,
+                    redirect_uri: REDIRECT_URI
+                })
+            }
+        );
 
-    updateTaskCount();
+        if (!response.ok) {
+            throw new Error("Failed to exchange authorization code");
+        }
 
-});
+        const tokens = await response.json();
 
+        // Store tokens temporarily
+        sessionStorage.setItem(
+            "access_token",
+            tokens.access_token
+        );
 
-/*
- * Update task count
- */
+        sessionStorage.setItem(
+            "id_token",
+            tokens.id_token
+        );
 
-function updateTaskCount() {
+        // Remove ?code=... from URL
+        window.history.replaceState(
+            {},
+            document.title,
+            REDIRECT_URI
+        );
 
-    const count = taskList.children.length;
+        // Update UI
+        status.textContent = "You are logged in.";
 
-    taskCount.textContent =
-        count === 1
-            ? "1 task"
-            : `${count} tasks`;
+        loginButton.textContent = "Logged in";
 
+        loginButton.disabled = true;
+
+        console.log("Login successful");
+        console.log("Access Token:", tokens.access_token);
+
+    } catch (error) {
+
+        console.error("Login error:", error);
+
+        status.textContent =
+            "Login failed. Check the browser console.";
+
+    }
 }
+
+
+// ================================
+// Check Existing Session
+// ================================
+
+function checkSession() {
+
+    const accessToken =
+        sessionStorage.getItem("access_token");
+
+    if (accessToken) {
+
+        status.textContent =
+            "You are logged in.";
+
+        loginButton.textContent =
+            "Logged in";
+
+        loginButton.disabled = true;
+
+    }
+}
+
+
+// ================================
+// Start
+// ================================
+
+handleCallback();
+
+checkSession();
