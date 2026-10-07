@@ -1,4 +1,5 @@
 import json
+import uuid
 import boto3
 import logging
 
@@ -18,6 +19,16 @@ def lambda_handler(event, context):
         logger.info(f"HTTP Method: {method}")
 
         # =========================
+        # Get authenticated user
+        # =========================
+
+        claims = event['requestContext']['authorizer']['jwt']['claims']
+
+        user_id = claims['sub']
+
+        logger.info(f"Authenticated user: {user_id}")
+
+        # =========================
         # GET /tasks
         # =========================
 
@@ -25,11 +36,18 @@ def lambda_handler(event, context):
 
             logger.info("Fetching tasks from DynamoDB")
 
-            response = table.scan()
+            response = table.scan(
+                FilterExpression='userId = :uid',
+                ExpressionAttributeValues={
+                    ':uid': user_id
+                }
+            )
 
             tasks = response.get('Items', [])
 
-            logger.info(f"Tasks returned: {len(tasks)}")
+            logger.info(
+                f"Tasks returned for user {user_id}: {len(tasks)}"
+            )
 
             return {
                 'statusCode': 200,
@@ -47,11 +65,15 @@ def lambda_handler(event, context):
             body = json.loads(event['body'])
 
             task = {
-                'taskId': body['taskId'],
-                'title': body['title']
+                'taskId': str(uuid.uuid4()),
+                'title': body['title'],
+                'userId': user_id
             }
 
-            logger.info(f"Creating task: {task['taskId']}")
+            logger.info(
+                f"Creating task {task['taskId']} "
+                f"for user {user_id}"
+            )
 
             table.put_item(Item=task)
 
@@ -62,9 +84,15 @@ def lambda_handler(event, context):
                 'body': json.dumps(task)
             }
 
+        # =========================
+        # Unsupported method
+        # =========================
+
         return {
             'statusCode': 400,
-            'body': json.dumps('Unsupported HTTP method')
+            'body': json.dumps({
+                'error': 'Unsupported HTTP method'
+            })
         }
 
     except Exception as e:
